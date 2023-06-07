@@ -3,93 +3,171 @@ import os
 import pystac_client
 import stackstac
 import rasterio
-import xarray as xr
-import numpy as np
-import fsspec
-import time
-import random
 
+import planetary_computer as pc
+from rasterio import RasterioIOError
+import time
+import numpy as np
+import xarray as xr
+import random
+from contextlib import nullcontext
+
+from shapely.geometry import Polygon, box
 from . import provider_base
 
-SHORT_TO_LONG_NAMES = {
-    't2m': '2m_temperature', 
-    'pev': 'potential_evaporation', 
-    'slhf': 'surface_latent_heat_flux',
-    'ssr': 'surface_net_solar_radiation', 
-    'sp': 'surface_pressure', 
-    'sshf': 'surface_sensible_heat_flux',
-    'e': 'total_evaporation', 
-    'tp': 'total_precipitation'
+ERA5BANDS_DESCRIPTION = {
+    'sp': 'surface_air_pressure', 
+    'tp': 'precipitation_amount_1hour_Accumulation',
+    'sr': 'integral_wrt_time_of_surface_direct_downwelling_shortwave_flux_in_air_1hour_Accumulation',
+    't': 'air_temperature_at_2_metres',
+    'maxt': 'air_temperature_at_2_metres_1hour_Maximum',
+    'mint': 'air_temperature_at_2_metres_1hour_Minimum',
+    'sea_t': 'sea_surface_temperature', 
+    'east_wind_10': 'eastward_wind_at_10_metres',
+    'east_wind_100':'eastward_wind_at_100_metres', 
+    'north_wind_10':'northward_wind_at_10_metres', 
+    'north_wind_100': 'northward_wind_at_100_metres', 
+    'ap': 'air_pressure_at_mean_sea_level', 
+    'dp': 'dew_point_temperature_at_2_metres'
 }
 
 class ERA5(provider_base.Provider):
 
-    def __init__(self, bands = ['t2m', 'pev', 'slhf', 'ssr', 'sp', 'sshf', 'e', 'tp'], aggregation_types = ["mean", "min", "max"], zarrpath = None, zarrurl = None):
-        self.is_temporal = True
+    def __init__(self, bands = ['t2m', 'pev', 'slhf', 'ssr', 'sp', 'sshf', 'e', 'tp'], best_orbit_filter = True, five_daily_filter = False, brdf_correction = True, aws_bucket = "planetary_computer"):
         
+        self.is_temporal = True
+
         self.bands = bands
-        self.aggregation_types = aggregation_types
-        self.zarrpath = zarrpath
-        self.zarrurl = zarrurl
+        self.best_orbit_filter = best_orbit_filter
+        self.five_daily_filter = five_daily_filter
+        self.aws_bucket = aws_bucket
+
+        if aws_bucket == "planetary_computer":
+            URL = 'https://planetarycomputer.microsoft.com/api/stac/v1'
+
+        else:
+            raise Exception("Bucket not supported.")
+        
+        self.catalog = pystac_client.Client.open(URL)
+
+        os.environ['AWS_NO_SIGN_REQUEST'] = "TRUE"
+
+
+    def get_attrs_for_band(self, band):
+
+        attrs = {}
+        attrs["provider"] = "ERA5"
+        attrs["interpolation_type"] = "nearest" 
+        attrs["description"] = ERA5BANDS_DESCRIPTION[band]
+
+        return attrs
+        
+
 
     def load_data(self, bbox, time_interval, **kwargs):
+
+        cm = nullcontext()
+        gdal_session = stackstac.DEFAULT_GDAL_ENV.updated(always=dict(session=rasterio.session.AWSSession(aws_unsigned = True, endpoint_url = None)))
+
+        with cm as gs:
         
-        # If an URL is given, loads the cloud zarr, otherwise loads from local zarrpath
-        if self.zarrpath:
-            era5 = xr.open_zarr(self.zarrpath, consolidated = False)
-        elif self.zarrurl:
-            for attempt in range(10):
-                try:
-                    mapper = fsspec.get_mapper(self.zarrurl)
-                    era5 = xr.open_zarr(mapper, consolidated=True)
-                except fsspec.exceptions.FSTimeoutError:
-                    sleeptime = random.uniform(10,60)
-                    print(f"ERA5 timeout, attempt {attempt}, retrying in {sleeptime} sec.")
-                    time.sleep(sleeptime)
+            search = self.catalog.search(
+                        bbox = bbox,
+                        collections=["era5-pds"],
+                        datetime=time_interval
+            )            
+       
+            if self.aws_bucket == "planetary_computer":
+                for attempt in range(10):
+                    try:
+                        items_era5 = pc.sign(search)
+                    except pystac_client.exceptions.APIError:
+                        print(f"ERA5: Planetary computer time out, attempt {attempt}, retrying in 60 seconds...")
+                        time.sleep(random.uniform(30,90))
+                    else:
+                        break
                 else:
-                    break
+                    print("Loading ERA5 failed after 10 attempts...")
+                    return None
             else:
-                print(f"Loading ERA5 for bbox {bbox} failed")
+                items_era5 = search.get_all_items()
+
+            if len(items_era5.to_dict()['features']) == 0:
                 return None
 
-        era5 = era5[self.bands]
+            # Extract assets of interest 
 
-        center_lon = (bbox[0] + bbox[2])/2
-        center_lat = (bbox[1] + bbox[3])/2
+            datasets = []
+            for item in items_era5:
+                signed_item = pc.sign(item)
+                datasets += [
+                    xr.open_dataset(asset.href, **asset.extra_fields["xarray:open_kwargs"])
+                    for b in self.bands
+                    if (ERA5BANDS_DESCRIPTION[b] in signed_item.assets.keys()) and (asset := signed_item.assets[ERA5BANDS_DESCRIPTION[b]])
+                ]
 
-        era5 = era5.sel(lat = center_lat, lon = center_lon, method = "nearest").drop_vars(["lat", "lon"])
+            stack = xr.combine_by_coords(datasets, join="exact")
 
-        era5 = era5.sel(time = slice(time_interval[:10], time_interval[-10:]))
+            # Drop the extra time variable
+            stack = stack.drop_vars('time1_bounds') if 'time1_bounds' in stack.data_vars else stack
+            
+            return stack
 
-        agg_era5_collector = []
-        for aggregation_type in self.aggregation_types:
-            if aggregation_type == "mean":
-                curr_agg_era5 = era5.groupby("time.date").mean("time").rename({"date": "time"})
-            elif aggregation_type == "min":
-                curr_agg_era5 = era5.groupby("time.date").min("time").rename({"date": "time"})
-            elif aggregation_type == "max":
-                curr_agg_era5 = era5.groupby("time.date").max("time").rename({"date": "time"})
-            elif aggregation_type == "median":
-                curr_agg_era5 = era5.groupby("time.date").median("time").rename({"date": "time"})
-            elif aggregation_type == "std":
-                curr_agg_era5 = era5.groupby("time.date").std("time").rename({"date": "time"})
+            """
+            metadata = items_era5.to_dict()['features'][0]["properties"]
+            epsg = int(metadata['cube:dimensions']['lat']['reference_system'].split(':')[-1])
+            
+           
+            #stack = stackstac.stack(items_era5, epsg = epsg, assets = self.bands, dtype = "float32", properties = ["era5:product_id"], band_coords = False, bounds_latlon = bbox, xy_coords = 'center', chunksize = 2048,errors_as_nodata=(RasterioIOError('.*'), ), gdal_env=gdal_session)
+            stack = stackstac.stack(items_era5, epsg = epsg, dtype = "float32", assets = self.bands, properties = ["era5:product_id"], band_coords = False, bounds = bbox, xy_coords = 'center', resolution = (20,20), chunksize = 1024)
+            
+
+
+            stack = stack.drop_vars(["id_old", "era5:data_coverage", "sentinel:sequence"], errors = "ignore")
+
+            stack.attrs["epsg"] = epsg
+
+                      
+            
+            elif self.five_daily_filter:
+
+                if "full_time_interval" in kwargs:
+                    full_time_interval = kwargs["full_time_interval"]
+                else:
+                    full_time_interval = time_interval
+
+                min_date, max_date = np.datetime64(full_time_interval[:10]), np.datetime64(full_time_interval[-10:])
+
+                dates = np.arange(min_date, max_date+1, 5)
+
+                stack = stack.sel(time = stack.time.dt.date.isin(dates))
+
+            if len(stack.time) == 0:
+                return None
+                    
+            bands = stack.band.values
+            stack["band"] = [f"era5_{b}" for b in stack.band.values]
+
+            stack = stack.to_dataset("band")
+
+
+            stack = stack.drop_vars(["epsg", "id", "id_old", "era5:data_coverage", "era5:sequence", "era5:product_id"], errors = "ignore")
+            
+            stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[D]")
+
+            if len(stack.time) > 0:
+                stack = stack.groupby("time.date").last(skipna = False).rename({"date": "time"})
             else:
-                continue
-            curr_agg_era5["time"] = np.array([str(d) for d in curr_agg_era5.time.values], dtype="datetime64[D]")
-            curr_agg_era5 = curr_agg_era5.rename({b: f"era5land_{b}_{aggregation_type}" for b in self.bands})
-            agg_era5_collector.append(curr_agg_era5)
-        
-        agg_era5 = xr.merge(agg_era5_collector)
+                return None
+            
+            for band in bands:
+                stack[f"era5_{band}"].attrs = self.get_attrs_for_band(band)
+            
+            stack.attrs["epsg"] = epsg
+
+            return stack
+
+            """
 
 
-        for b in self.bands:
-            for a in self.aggregation_types:
-
-                agg_era5[f"era5land_{b}_{a}"].attrs = {
-                    "provider": "ERA5-Land",
-                    "interpolation_type": "linear",
-                    "description": f"{SHORT_TO_LONG_NAMES[b]} 3-hourly data aggregated by {a}"
-                }
-        
-
-        return agg_era5
+    
