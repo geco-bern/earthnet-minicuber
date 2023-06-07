@@ -33,12 +33,10 @@ ERA5BANDS_DESCRIPTION = {
 
 class ERA5(provider_base.Provider):
 
-    def __init__(self, bands = ['t2m', 'pev', 'slhf', 'ssr', 'sp', 'sshf', 'e', 'tp'], best_orbit_filter = True, five_daily_filter = False, brdf_correction = True, aws_bucket = "planetary_computer"):
+    def __init__(self, bands = ['t2m', 'pev', 'slhf', 'ssr', 'sp', 'sshf', 'e', 'tp'], five_daily_filter = False, aws_bucket = "planetary_computer"):
         
         self.is_temporal = True
-
         self.bands = bands
-        self.best_orbit_filter = best_orbit_filter
         self.five_daily_filter = five_daily_filter
         self.aws_bucket = aws_bucket
 
@@ -97,6 +95,8 @@ class ERA5(provider_base.Provider):
 
             # Extract assets of interest 
 
+            epsg = int(items_era5.to_dict()['features'][0]['properties']['cube:dimensions']['lat']['reference_system'].split('epsg:')[1])
+
             datasets = []
             for item in items_era5:
                 signed_item = pc.sign(item)
@@ -110,26 +110,9 @@ class ERA5(provider_base.Provider):
 
             # Drop the extra time variable
             stack = stack.drop_vars('time1_bounds') if 'time1_bounds' in stack.data_vars else stack
+              
             
-            return stack
-
-            """
-            metadata = items_era5.to_dict()['features'][0]["properties"]
-            epsg = int(metadata['cube:dimensions']['lat']['reference_system'].split(':')[-1])
-            
-           
-            #stack = stackstac.stack(items_era5, epsg = epsg, assets = self.bands, dtype = "float32", properties = ["era5:product_id"], band_coords = False, bounds_latlon = bbox, xy_coords = 'center', chunksize = 2048,errors_as_nodata=(RasterioIOError('.*'), ), gdal_env=gdal_session)
-            stack = stackstac.stack(items_era5, epsg = epsg, dtype = "float32", assets = self.bands, properties = ["era5:product_id"], band_coords = False, bounds = bbox, xy_coords = 'center', resolution = (20,20), chunksize = 1024)
-            
-
-
-            stack = stack.drop_vars(["id_old", "era5:data_coverage", "sentinel:sequence"], errors = "ignore")
-
-            stack.attrs["epsg"] = epsg
-
-                      
-            
-            elif self.five_daily_filter:
+            if self.five_daily_filter:
 
                 if "full_time_interval" in kwargs:
                     full_time_interval = kwargs["full_time_interval"]
@@ -144,13 +127,13 @@ class ERA5(provider_base.Provider):
 
             if len(stack.time) == 0:
                 return None
-                    
-            bands = stack.band.values
-            stack["band"] = [f"era5_{b}" for b in stack.band.values]
 
-            stack = stack.to_dataset("band")
+            # Rename bands with short names
+            key_list = list(ERA5BANDS_DESCRIPTION.keys())
+            val_list = list(ERA5BANDS_DESCRIPTION.values())
 
-
+            stack = stack.rename({b:'era5_'+key_list[val_list.index(b)] for b in list(stack.data_vars)})
+            
             stack = stack.drop_vars(["epsg", "id", "id_old", "era5:data_coverage", "era5:sequence", "era5:product_id"], errors = "ignore")
             
             stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[D]")
@@ -160,14 +143,13 @@ class ERA5(provider_base.Provider):
             else:
                 return None
             
-            for band in bands:
+            for band in self.bands:
                 stack[f"era5_{band}"].attrs = self.get_attrs_for_band(band)
             
             stack.attrs["epsg"] = epsg
 
             return stack
 
-            """
 
 
     
