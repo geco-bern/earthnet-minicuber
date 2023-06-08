@@ -190,6 +190,13 @@ class Minicuber:
                     print(f"Loading {provider.__class__.__name__} for {time_interval}")
 
                 product_cube = provider.load_data(self.padded_bbox, time_interval, full_time_interval = self.full_time_interval)
+                
+                # Match ERA5 dates to S2
+                if provider.name == 's2':
+                    first_date = pd.to_datetime(str(product_cube.time[0].values))
+                if provider.name == 'e5':
+                    if provider.match_s2:
+                        product_cube = provider.match_to_sentinel(product_cube, first_date)
 
                 if product_cube is not None:
                     if cube is None:
@@ -211,6 +218,7 @@ class Minicuber:
         
         cube = xr.merge(all_data, combine_attrs = 'override')
 
+
         for provider in self.spatial_providers:
             if verbose:
                 print(f"Loading {provider.__class__.__name__}")
@@ -229,7 +237,7 @@ class Minicuber:
         
         if "time" in cube:
             cube['time'] = pd.DatetimeIndex(cube['time'].values)
-
+            cube = cube.sortby('time')
             cube = cube.sel(time = slice(self.time_interval[:10], self.time_interval[-10:]))
 
         cube.attrs = {
@@ -237,6 +245,8 @@ class Minicuber:
         }
 
         return cube
+
+
 
 
 

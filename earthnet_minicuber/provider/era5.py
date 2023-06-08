@@ -33,11 +33,14 @@ ERA5BANDS_DESCRIPTION = {
 
 class ERA5(provider_base.Provider):
 
-    def __init__(self, bands = ['t2m', 'pev', 'slhf', 'ssr', 'sp', 'sshf', 'e', 'tp'], five_daily_filter = False, aws_bucket = "planetary_computer"):
+    def __init__(self, bands = ['t'], n_daily_filter = None, aws_bucket = "planetary_computer", match_s2 = True, agg_list=None):
         
         self.is_temporal = True
+        self.name = 'e5'
         self.bands = bands
-        self.five_daily_filter = five_daily_filter
+        self.n_daily_filter = n_daily_filter
+        self.agg_list = agg_list
+        self.match_s2 = match_s2
         self.aws_bucket = aws_bucket
 
         if aws_bucket == "planetary_computer":
@@ -93,10 +96,9 @@ class ERA5(provider_base.Provider):
             if len(items_era5.to_dict()['features']) == 0:
                 return None
 
-            # Extract assets of interest 
-
             epsg = int(items_era5.to_dict()['features'][0]['properties']['cube:dimensions']['lat']['reference_system'].split('epsg:')[1])
-
+            
+            # Extract assets of interest 
             datasets = []
             for item in items_era5:
                 signed_item = pc.sign(item)
@@ -110,38 +112,47 @@ class ERA5(provider_base.Provider):
 
             # Drop the extra time variable
             stack = stack.drop_vars('time1_bounds') if 'time1_bounds' in stack.data_vars else stack
-              
             
-            if self.five_daily_filter:
-
-                if "full_time_interval" in kwargs:
-                    full_time_interval = kwargs["full_time_interval"]
-                else:
-                    full_time_interval = time_interval
-
-                min_date, max_date = np.datetime64(full_time_interval[:10]), np.datetime64(full_time_interval[-10:])
-
-                dates = np.arange(min_date, max_date+1, 5)
-
-                stack = stack.sel(time = stack.time.dt.date.isin(dates))
-
-            if len(stack.time) == 0:
-                return None
-
             # Rename bands with short names
             key_list = list(ERA5BANDS_DESCRIPTION.keys())
             val_list = list(ERA5BANDS_DESCRIPTION.values())
 
             stack = stack.rename({b:'era5_'+key_list[val_list.index(b)] for b in list(stack.data_vars)})
             
+            if self.n_daily_filter:
+                if self.agg_list:
+                    # Perform variable-wise resampling
+                    resampled_stack = xr.Dataset()
+                    for i, var_name in enumerate(self.bands):
+                        agg_type = self.agg_list[i]
+                        var_resampled = stack['era5_'+var_name]
+                        if agg_type == 'sum':
+                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').sum()
+                        if agg_type == 'mean':
+                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').mean()
+                        if agg_type == 'median':
+                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').median()
+                        if agg_type == 'min':
+                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').min()
+                        if agg_type == 'max':
+                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').max()
+                        
+                        resampled_stack['era5_'+var_name] = var_resampled
+
+                    resampled_stack.attrs = stack.attrs
+                    stack = resampled_stack
+     
+                else:
+                    # All resampled using mean
+                    stack = stack.resample(time=f'{self.n_daily_filter}D').mean()
+
+
+            if len(stack.time) == 0:
+                return None
+
             stack = stack.drop_vars(["epsg", "id", "id_old", "era5:data_coverage", "era5:sequence", "era5:product_id"], errors = "ignore")
             
-            stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[D]")
-
-            if len(stack.time) > 0:
-                stack = stack.groupby("time.date").last(skipna = False).rename({"date": "time"})
-            else:
-                return None
+            stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[h]")
             
             for band in self.bands:
                 stack[f"era5_{band}"].attrs = self.get_attrs_for_band(band)
@@ -149,6 +160,41 @@ class ERA5(provider_base.Provider):
             stack.attrs["epsg"] = epsg
 
             return stack
+
+
+
+    def match_to_sentinel(self, cube, first_date):
+        cube_filtered = cube.sel(time=cube.time>first_date)
+        
+        # Then resample either using agg list or mean
+        if self.agg_list:
+            resampled_stack = xr.Dataset()
+            for i, var_name in enumerate(self.bands):
+                agg_type = self.agg_list[i]
+                var_resampled = cube_filtered['era5_'+var_name]
+                if agg_type == 'sum':
+                    var_resampled = var_resampled.resample(time='5D').sum()
+                if agg_type == 'mean':
+                    var_resampled = var_resampled.resample(time='5D').mean()
+                if agg_type == 'median':
+                    var_resampled = var_resampled.resample(time='5D').median()
+                if agg_type == 'min':
+                    var_resampled = var_resampled.resample(time='5D').min()
+                if agg_type == 'max':
+                    var_resampled = var_resampled.resample(time='5D').max()
+                
+                resampled_stack['era5_'+var_name] = var_resampled
+
+            resampled_stack.attrs = cube.attrs
+            cube = resampled_stack
+
+        else:
+            # All resampled using mean
+            cube = cube_filtered.resample(time='5D').mean()
+
+
+        return cube
+
 
 
 

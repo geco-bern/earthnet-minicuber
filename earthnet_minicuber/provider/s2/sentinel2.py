@@ -42,6 +42,7 @@ class Sentinel2(provider_base.Provider):
     def __init__(self, bands = ["AOT", "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B09", "B11", "B12", "WVP"], best_orbit_filter = True, five_daily_filter = False, brdf_correction = True, cloud_mask = True, cloud_mask_rescale_factor = None, aws_bucket = "planetary_computer", s2_avail_var = True, correct_processing_baseline = True):
         
         self.is_temporal = True
+        self.name = 's2'
 
         self.cloud_mask = CloudMask(bands=bands, cloud_mask_rescale_factor = cloud_mask_rescale_factor) if cloud_mask else None
 
