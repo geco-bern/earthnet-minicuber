@@ -98,6 +98,26 @@ Kwargs:
 - `correct_processing_baseline`: If `True` (default): corrects the shift of +1000 that exists in Sentinel 2 data with processing baseline >= 4.0
 
 
+### ERA5
+
+The ERA5 provider loads and processes hourly ECMWF climate reanalysis data.
+
+Kwargs:
+- `bands`: choose any subset from `["sp", "tp", "sr", "t", "maxt", "mint", "sea_t", "east_wind_10", "east_wind_100", "north_wind_10", "north_wind_100", "ap", "dp"]`.
+    - sp = surface pressure
+    - tp = total precipitation 
+    - sr = solar radation 
+    - (min/max)t = (min/max) temperature 
+    - sea_t = sea surface temperature
+    - east/north_wind_10/100 = eastward/northward wind at 10/100 metres
+    - ap = air pressure at sea level
+    - dp = dew point temperature\
+    More on the variables here: https://planetarycomputer.microsoft.com/dataset/era5-pds
+- `aws_bucket`: We currently only support data loading from the Microsoft Planetary Computer (`"planetary_computer"`).
+- `n_daily_filter`: Integer. Will aggregate (mean) the data to n-daily, starting form the first date available in the data. 
+- `agg_list`: List of aggregation functions for each variable among `['min', 'max', 'mean', 'median', 'sum']`. The list must be as long as the number of bands, and in the same order as the bands. For example if querying ['t', 'sp', 'sr'] with agg_list = ['min', 'sum', 'mean'] then 't' will be aggregate using 'min' and so forth. If None and `n_daily_filter` provided, all variables aggregated with 'mean' by default.
+- `match_s2`: Match the timestamps to those of Sentinel-2 (5-daily), using as first date the first occurrence of Sentinel-2 data. This will override `n_daily_filter`. All variables aggregated using 'mean' unless provided otherwise with `agg_list`.
+
 ## Installation
 
 Prerequisites (We use an Anaconda environment):
