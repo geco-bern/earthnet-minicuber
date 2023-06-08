@@ -119,32 +119,40 @@ class ERA5(provider_base.Provider):
 
             stack = stack.rename({b:'era5_'+key_list[val_list.index(b)] for b in list(stack.data_vars)})
             
-            if self.n_daily_filter:
+        
+            if self.n_daily_filter and not self.match_s2:
                 if self.agg_list:
-                    # Perform variable-wise resampling
-                    resampled_stack = xr.Dataset()
-                    for i, var_name in enumerate(self.bands):
-                        agg_type = self.agg_list[i]
-                        var_resampled = stack['era5_'+var_name]
-                        if agg_type == 'sum':
-                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').sum()
-                        if agg_type == 'mean':
-                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').mean()
-                        if agg_type == 'median':
-                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').median()
-                        if agg_type == 'min':
-                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').min()
-                        if agg_type == 'max':
-                            var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').max()
-                        
-                        resampled_stack['era5_'+var_name] = var_resampled
+                    if (len(self.agg_list) == len(self.bands)):
+                        # Perform variable-wise resampling
+                        resampled_stack = xr.Dataset()
+                        for i, var_name in enumerate(self.bands):
+                            agg_type = self.agg_list[i]
+                            var_resampled = stack['era5_'+var_name]
+                            if agg_type == 'sum':
+                                var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').sum()
+                            if agg_type == 'mean':
+                                var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').mean()
+                            if agg_type == 'median':
+                                var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').median()
+                            if agg_type == 'min':
+                                var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').min()
+                            if agg_type == 'max':
+                                var_resampled = var_resampled.resample(time=f'{self.n_daily_filter}D').max()
+                            
+                            resampled_stack['era5_'+var_name] = var_resampled
 
-                    resampled_stack.attrs = stack.attrs
-                    stack = resampled_stack
-     
+                        resampled_stack.attrs = stack.attrs
+                        stack = resampled_stack
+
+                    else:
+                        raise Exception('agg_list does not have same number of elements as there are bands!')
+    
                 else:
                     # All resampled using mean
                     stack = stack.resample(time=f'{self.n_daily_filter}D').mean()
+
+            if self.n_daily_filter and self.match_s2:
+                print('Provided both n_daily filter and match_s2! Will only use match_s2.')
 
 
             if len(stack.time) == 0:
@@ -168,22 +176,26 @@ class ERA5(provider_base.Provider):
         
         # Then resample either using agg list or mean
         if self.agg_list:
-            resampled_stack = xr.Dataset()
-            for i, var_name in enumerate(self.bands):
-                agg_type = self.agg_list[i]
-                var_resampled = cube_filtered['era5_'+var_name]
-                if agg_type == 'sum':
-                    var_resampled = var_resampled.resample(time='5D').sum()
-                if agg_type == 'mean':
-                    var_resampled = var_resampled.resample(time='5D').mean()
-                if agg_type == 'median':
-                    var_resampled = var_resampled.resample(time='5D').median()
-                if agg_type == 'min':
-                    var_resampled = var_resampled.resample(time='5D').min()
-                if agg_type == 'max':
-                    var_resampled = var_resampled.resample(time='5D').max()
-                
-                resampled_stack['era5_'+var_name] = var_resampled
+            if (len(self.agg_list) == len(self.bands)):
+                resampled_stack = xr.Dataset()
+                for i, var_name in enumerate(self.bands):
+                    agg_type = self.agg_list[i]
+                    var_resampled = cube_filtered['era5_'+var_name]
+                    if agg_type == 'sum':
+                        var_resampled = var_resampled.resample(time='5D').sum()
+                    if agg_type == 'mean':
+                        var_resampled = var_resampled.resample(time='5D').mean()
+                    if agg_type == 'median':
+                        var_resampled = var_resampled.resample(time='5D').median()
+                    if agg_type == 'min':
+                        var_resampled = var_resampled.resample(time='5D').min()
+                    if agg_type == 'max':
+                        var_resampled = var_resampled.resample(time='5D').max()
+                    
+                    resampled_stack['era5_'+var_name] = var_resampled
+            else:
+                raise Exception('agg_list does not have same number of elements as there are bands!')
+    
 
             resampled_stack.attrs = cube.attrs
             cube = resampled_stack
