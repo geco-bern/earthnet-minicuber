@@ -14,6 +14,7 @@ It is currently under development, thus do expect bugs and please report them!
 - Download the repository
 ```Python
 # Add the path to the repository
+import sys
 sys.path.insert(0, '/Absolute_path_to_repo/earthnet-minicuber/')
 # Import the module
 from earthnet_minicuber.minicuber import *
