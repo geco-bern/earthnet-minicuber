@@ -242,4 +242,6 @@ class Sentinel2(provider_base.Provider):
             
             stack.attrs["epsg"] = epsg
 
+            stack = stack.drop(['angle', 'spatial_ref'])
+
             return stack
