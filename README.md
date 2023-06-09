@@ -1,25 +1,7 @@
 
 # EarthNet Minicuber
 
-*A Python library for creating EarthNet-style minicubes.*
-
-
-<a href='https://pypi.python.org/pypi/earthnet-minicuber'>
-    <img src='https://img.shields.io/pypi/v/earthnet-minicuber.svg' alt='PyPI' />
-</a>
-<a href="https://opensource.org/licenses/MIT" target="_blank">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-</a>
-<a href="https://twitter.com/vitusbenson" target="_blank">
-    <img src="https://img.shields.io/twitter/follow/vitusbenson?style=social" alt="Twitter">
-</a>
-
-
-**GitHub**: [https://github.com/earthnet2021/earthnet-minicuber](https://github.com/earthnet2021/earthnet-minicuber)
-
-**PyPI**: [https://pypi.org/project/earthnet-minicuber/](https://pypi.org/project/earthnet-minicuber/)
-
-
+*Code for creating EarthNet-style minicubes.*
 
 This package creates minicubes from cloud storage using STAC catalogues. A minicube usually contains a satellite image time series of Sentinel 2 imagery alongside other complementary information, all re-gridded to a common grid. This package implements a cloud mask based on deep learning, which allows for analysis-ready Sentinel 2 imagery.
 
@@ -28,9 +10,13 @@ It is currently under development, thus do expect bugs and please report them!
 
 ## Tutorial
 
-1. Loading the package
+1. Loading the code as a package
+- Download the repository
 ```Python
-import earthnet_minicuber as emc
+# Add the path to the repository
+sys.path.insert(0, '/Absolute_path_to_repo/earthnet-minicuber/')
+# Import the module
+from earthnet_minicuber.minicuber import *
 ```
 
 2. Creating a dictionary with specifications of the desired minicube
@@ -44,6 +30,10 @@ specs = {
         {
             "name": "s2",
             "kwargs": {"bands": ["B02", "B03", "B04", "B8A"], "best_orbit_filter": True, "five_daily_filter": False, "brdf_correction": True, "cloud_mask": True, "aws_bucket": "planetary_computer"}
+        },
+        {
+           "name": "era5",
+            "kwargs": {"bands": ['sr', 't', 'mint'], "aws_bucket": "planetary_computer", "n_daily_filter": None, "agg_list": ['min', 'max', 'sum'], "match_s2": True} 
         },
         {
             "name": "s1",
