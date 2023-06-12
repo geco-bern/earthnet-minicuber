@@ -204,6 +204,8 @@ class ERA5(provider_base.Provider):
             # All resampled using mean
             cube = cube_filtered.resample(time='5D').mean()
 
+        # Put time index to datetime.date() format to match S2
+        cube["time"] = cube.time.to_index().date
 
         return cube
 
