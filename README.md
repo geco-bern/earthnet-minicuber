@@ -109,34 +109,6 @@ Kwargs:
 - `agg_list`: List of aggregation functions for each variable among `['min', 'max', 'mean', 'median', 'sum']`. The list must be as long as the number of bands, and in the same order as the bands. For example if querying ['t', 'sp', 'sr'] with agg_list = ['min', 'sum', 'mean'] then 't' will be aggregate using 'min' and so forth. If None and `n_daily_filter` provided, all variables aggregated with 'mean' by default.
 - `match_s2`: If True, match the timestamps to those of Sentinel-2 (5-daily), using as first date the first occurrence of Sentinel-2 data. This will override `n_daily_filter`. All variables aggregated using 'mean' unless provided otherwise with `agg_list`. **Attention: Sentinel-2 must be provided first in specs in this case.**
 
-## Installation
-
-Prerequisites (We use an Anaconda environment):
-
-```
-conda create -n minicuber python=3.10 gdal cartopy -c conda-forge
-conda deactivate
-conda activate minicuber
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install scipy matplotlib seaborn netCDF4 xarray zarr dask shapely pillow pandas s3fs fsspec boto3 psycopg2 pystac-client stackstac planetary-computer rasterio[s3] rioxarray odc-algo segmentation-models-pytorch folium ipykernel ipywidgets sen2nbar
-```
-
-Install this package with PyPI:
-```
-pip install earthnet-minicuber
-```
-
-or install this package in developing mode with
-```
-git clone https://github.com/earthnet2021/earthnet-minicuber.git
-cd earthnet-minicuber
-pip install -e .
-```
-
-or directly with
-```
-pip install git+https://github.com/earthnet2021/earthnet-minicuber.git
-```
 
 ## Similar Packages
 
@@ -147,4 +119,4 @@ Similar to this package, [cubo](https://github.com/davemlz/cubo) provides a high
 
 ## Acknowledgement
 
-This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 101004188 ([DeepCube Horizon 2020](https://deepcube-h2020.eu/ "DeepCube Horizon 2020")). We are grateful to David Montero Loaiza for providing the [sen2nbar](https://github.com/ESDS-Leipzig/sen2nbar) package used for the Sentinel 2 BRDF correction. We are grateful to César Aybar and the [CloudSEN12](https://cloudsen12.github.io/) team, their work forms the basis for the cloud mask implemented in earthnet-minicuber.
+This project is a continuation of the work developed by Requena-Mesa et al. https://github.com/earthnet2021/earthnet-minicuber
