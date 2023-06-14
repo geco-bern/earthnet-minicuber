@@ -68,7 +68,7 @@ def call_sen2nbar(stack, items, epsg):
     orig_bands = stack.band.values.tolist()
 
     # Concatenate c-factor
-    c = xr.concat(c_array, dim="time")
+    c = xr.concat(c_array, dim="time", coords='minimal')
     c["time"] = stack.time.values
 
     stack_to_nbar = stack.to_dataset("band")[[v for v in c.to_dataset("band").data_vars.keys() if v in stack.band]].to_array("band")
