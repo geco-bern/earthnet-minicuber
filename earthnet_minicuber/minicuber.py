@@ -190,15 +190,15 @@ class Minicuber:
                     print(f"Loading {provider.__class__.__name__} for {time_interval}")
 
                 product_cube = provider.load_data(self.padded_bbox, time_interval, full_time_interval = self.full_time_interval)
-                
-                # Match ERA5 dates to S2
-                if provider.name == 's2':
-                    first_date = pd.to_datetime(str(product_cube.time[0].values))
-                if provider.name == 'e5':
-                    if provider.match_s2:
-                        product_cube = provider.match_to_sentinel(product_cube, first_date)
 
                 if product_cube is not None:
+                    # Match ERA5 dates to S2
+                    if provider.name == 's2':
+                        first_date = pd.to_datetime(str(product_cube.time[0].values))
+                    if provider.name == 'e5':
+                        if provider.match_s2:
+                            product_cube = provider.match_to_sentinel(product_cube, first_date)
+
                     if cube is None:
                         cube = self.regrid_product_cube(product_cube)
                     else:
