@@ -9,7 +9,7 @@ It is currently under development, thus do expect bugs and please report them!
 
 ## Additions to original earthnet-minicuber
 
-The modifications to the code now allow more flexibility in querying and downloading, specifically regarding ERA-5 climate reanalysis data. Whereas previously the package had limited spatial coverage of ERA-5 data, it is now posisble to request any region globally.\
+The modifications to the code now allow more flexibility in querying and downloading, specifically regarding ERA-5 climate reanalysis data. Whereas previously the package had limited spatial coverage of ERA-5 data, it is now possible to request any region globally.\
 ERA-5 has a hourly temporal resolution, but is often aggregated to coarser resolutions when combined with other spatio-temporal datasets (e.g. Sentinel-2 with a 5-daily frequency). The code allows for the temporal aggregation of ERA-5 variables to any desired resolution, each according to their statistic (mean, minimum, maximum...). An automatic matching to the Sentinel-2 timeseries is also possible if the two data sources are requested together. 
 
 
