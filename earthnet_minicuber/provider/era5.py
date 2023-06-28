@@ -58,7 +58,7 @@ class ERA5(provider_base.Provider):
 
         attrs = {}
         attrs["provider"] = "ERA5"
-        attrs["interpolation_type"] = "nearest" 
+        attrs["interpolation_type"] = "linear" 
         attrs["description"] = ERA5BANDS_DESCRIPTION[band]
 
         return attrs
