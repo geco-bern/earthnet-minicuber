@@ -226,6 +226,14 @@ class ERA5(provider_base.Provider):
         
         stack.attrs["epsg"] = 4326
 
+        if 'spatial_ref' in stack.dims:
+            stack = stack.drop('spatial_ref')
+        if 'angle' in stack.dims:
+            stack = stack.drop('angle')
+        if 'angle' in stack.coords:
+            stack = stack.reset_coords('angle', drop=True)
+
+
         return stack
 
 
