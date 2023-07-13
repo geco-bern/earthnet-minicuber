@@ -144,15 +144,6 @@ class ERA5(provider_base.Provider):
                     #s3_data_key = f'{year}/{month}/data/{v}.nc' 
                     s3_zarr_store = f'era5-pds/zarr/{year}/{month}/data/{v}.zarr'
 
-                    """
-                    # Create an xarray Dataset directly from the remote file using s3fs and h5netcdf engine
-                    ds = xr.open_dataset(
-                        self.catalog.open(f's3://era5-pds/{s3_data_key}'),
-                        engine='h5netcdf'#,
-                        #chunks={'time': (372, 372), 'lat': (150, 150, 150, 150, 121), 'lon': (150, 150, 150, 150, 150, 150, 150, 150, 150, 90)} # Specify chunks for Dask
-                    )
-                    """
-
                     # Open the Zarr store using s3fs
                     store = s3fs.S3Map(s3_zarr_store, s3=self.s3)
                     # Wrap the store in KVStore
@@ -166,17 +157,12 @@ class ERA5(provider_base.Provider):
                         ds = ds.rename({time_coord: 'time'})
 
                     # Convert data variables to Dask arrays (following what is done with planetary_computer)
-                    if int(month) in [1,3,5,7,8,10,11]: # longer months
-                        ds = ds.chunk({'time': (372, 372), 'lat': (150, 150, 150, 150, 121), 'lon': (150, 150, 150, 150, 150, 150, 150, 150, 150, 90)}) #define the chunking here
-                    if int(month) in [4,6,9,11]:
-                        ds = ds.chunk({'time': (372, 348), 'lat': (150, 150, 150, 150, 121), 'lon': (150, 150, 150, 150, 150, 150, 150, 150, 150, 90)})
-                    if int(month) == 2: #shorter ;onth
-                        if int(year)//4:  # leap year
-                            ds = ds.chunk({'time': (372, 324), 'lat': (150, 150, 150, 150, 121), 'lon': (150, 150, 150, 150, 150, 150, 150, 150, 150, 90)})
-                        else:
-                            ds = ds.chunk({'time': (372, 300), 'lat': (150, 150, 150, 150, 121), 'lon': (150, 150, 150, 150, 150, 150, 150, 150, 150, 90)})
+                    num_chunks_time = 2
+                    num_chunks_lat = 5
+                    num_chunks_lon = 10
+                    chunk_sizes = {'time': len(ds['time'])//num_chunks_time, 'lon': len(ds['lon'])//num_chunks_lon, 'lat': len(ds['lat'])//num_chunks_lat} 
+                    ds = ds.chunk(chunk_sizes)
                 
-
                     datasets.append(ds)
                 else:
                     print(f'{b} not found for {time_interval}, skipping.')
