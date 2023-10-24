@@ -1,5 +1,5 @@
 
-# EarthNet Minicuber
+# GECO EarthNet Minicuber
 
 *Code for creating EarthNet-style minicubes.*
 
