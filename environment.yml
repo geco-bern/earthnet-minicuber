@@ -11,8 +11,5 @@ dependencies:
   - wheel
   - conda-content-trust
   - conda-libmamba-solver
-  - pytorch
-  - torchaudio
-  - torchvision
-  - pytorch-cuda=11.8
+
 
