@@ -1,4 +1,4 @@
-name: mlenv
+name: mc
 channels:
   - nvidia
   - conda-forge
