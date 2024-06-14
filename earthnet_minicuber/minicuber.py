@@ -172,7 +172,6 @@ class Minicuber:
 
     @classmethod
     def load_minicube(cls, specs, verbose = True, compute = False):
-
         self = cls(specs)
 
         if not compute and (len(self.monthly_intervals) > 3):
@@ -183,14 +182,13 @@ class Minicuber:
         all_data = []
         cube = None
         for time_interval in self.monthly_intervals:
-
+            
             for provider in self.temporal_providers:
-
+                time.sleep(2) #so no api kickout should happen
                 if verbose:
                     print(f"Loading {provider.__class__.__name__} for {time_interval}")
 
                 product_cube = provider.load_data(self.padded_bbox, time_interval, full_time_interval = self.full_time_interval)
-
                 if product_cube is not None:
                     # Match ERA5 dates to S2
                     if provider.name == 's2':
@@ -215,9 +213,10 @@ class Minicuber:
                 else:
                     all_data.append(cube)
             cube = None
+            
         
         cube = xr.merge(all_data, combine_attrs = 'override')
-
+        
 
         for provider in self.spatial_providers:
             if verbose:
@@ -244,6 +243,7 @@ class Minicuber:
             "history": f"Created on {datetime.datetime.now()} with the earthnet-minicuber Python package. See https://github.com/earthnet2021/earthnet-minicuber"
         }
 
+        
         return cube
 
 
