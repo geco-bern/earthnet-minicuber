@@ -17,15 +17,42 @@ import random
 from contextlib import nullcontext
 import os.path
 import datetime
+import tempfile
+import zipfile
 
 from shapely.geometry import Polygon, box
 from . import provider_base
 
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ERA5BANDS_DESCRIPTION = {
-    'sp': 'surface_air_pressure', 
-    'tp': 'precipitation_amount_1hour_Accumulation',
-    'sr': 'integral_wrt_time_of_surface_direct_downwelling_shortwave_flux_in_air_1hour_Accumulation',
+    'u100': 'eastward_wind_at_100_metres',
+    'v100': 'northward_wind_at_100_metres',
+    'u10': 'eastward_wind_at_10_metres',
+    'v10': 'northward_wind_at_10_metres',
+    'ssrd': 'surface_solar_radiation_downwards',
+    'mx2t':'air_temperature_at_2_metres_1hour_Maximum',
+    'mn2t':'air_temperature_at_2_metres_1hour_Minimum',
+    'sst':'sea_surface_temperature',
+    'd2m':'dew_point_temperature_at_2_metres',
     't': 'air_temperature_at_2_metres',
+    'pev': 'potential_evaporation',
+    'ro': 'runoff',
+    'src': 'integral_wrt_time_of_surface_net_downward_shortwave_flux_in_air',
+    'snowc': 'snow_cover',
+    'sd': 'snow_depth',
+    'smlt': 'snowfall',
+    'ssr': 'surface_solar_radiation',
+    'sro': 'integral_wrt_time_of_surface_runoff',
+    'e': 'evaporation',
+    'tp': 'precipitation_amount_1hour_Accumulation',
+    'swvl1': 'volumetric_soil_water_layer_1',
+    'swvl2': 'volumetric_soil_water_layer_2',
+    'swvl3': 'volumetric_soil_water_layer_3',
+    'swvl4': 'volumetric_soil_water_layer_4',#here on selene
+    'sp': 'surface_air_pressure', 
+    'sr': 'integral_wrt_time_of_surface_direct_downwelling_shortwave_flux_in_air_1hour_Accumulation',
+    't2m': 'air_temperature_at_2_metres',
     'maxt': 'air_temperature_at_2_metres_1hour_Maximum',
     'mint': 'air_temperature_at_2_metres_1hour_Minimum',
     'sea_t': 'sea_surface_temperature', 
@@ -57,6 +84,8 @@ class ERA5(provider_base.Provider):
             # Create an S3FileSystem instance
             #self.catalog = s3fs.S3FileSystem(anon=True)  # Not really a catalog, actually a filesystem   
             self.s3 = s3fs.S3FileSystem(anon=True)  
+        elif self.aws_bucket == "load_local":
+            print("Loading local ERA5 file")
         else:
             raise Exception("Bucket not supported.")
         
@@ -166,8 +195,38 @@ class ERA5(provider_base.Provider):
                     datasets.append(ds)
                 else:
                     print(f'{b} not found for {time_interval}, skipping.')
-                         
+
+        
+        if self.aws_bucket == "load_local":
+            year = time_interval.split('-')[0]
+            month = time_interval.split('-')[1]
+            base_path = sys.path.insert(0, os.path.join("../",parent_dir, 'ERA5_dowload'))
+            file_name = f"an_sfc_ERA5_{year}_{month}.netcdf"
+            datasets = []
+
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                # Extract the zip file
+                path = f"{base_path}{year}/{file_name}"
+
+
+                    # Open the NetCDF file
+                ds = xr.open_dataset(path, engine='netcdf4')
+                ds = ds.rename({'longitude': 'lon', 'latitude': 'lat'})
+                # Iterate over the bands                        
+                for b in self.bands:
+                    if b in ds.variables:  
+                        datasets.append(ds)
+                        break  # Exit the loop if a dataset is added
+
+
+
+        
+
+
+
+
         stack = xr.combine_by_coords(datasets, join="exact")
+
 
         # Drop the extra time variable
         stack = stack.drop_vars('time1_bounds') if 'time1_bounds' in stack.data_vars else stack
@@ -176,9 +235,14 @@ class ERA5(provider_base.Provider):
         key_list = list(ERA5BANDS_DESCRIPTION.keys())
         val_list = list(ERA5BANDS_DESCRIPTION.values())
 
-        stack = stack.rename({b:'era5_'+key_list[val_list.index(b)] for b in list(stack.data_vars)})
+        if self.aws_bucket != "load_local":
+            stack = stack.rename({b:'era5_'+key_list[val_list.index(b)] for b in list(stack.data_vars)})
+        else:
+            selected_data_vars = [var for var in stack.data_vars if var in key_list]
+            mapping = {old_name: 'era5_' + old_name for old_name in selected_data_vars}
+            stack = stack.rename(mapping)
         
-    
+
         if self.n_daily_filter and not self.match_s2:
             if self.agg_list:
                 if (len(self.agg_list) == len(self.bands)):
@@ -219,9 +283,13 @@ class ERA5(provider_base.Provider):
 
         stack = stack.drop_vars(["epsg", "id", "id_old", "era5:data_coverage", "era5:sequence", "era5:product_id"], errors = "ignore")
         
-        stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[h]")
         
+
+        
+        stack["time"] = np.array([str(d) for d in stack.time.values], dtype="datetime64[h]")
+
         for band in self.bands:
+            
             stack[f"era5_{band}"].attrs = self.get_attrs_for_band(band)
         
         stack.attrs["epsg"] = 4326
@@ -233,7 +301,7 @@ class ERA5(provider_base.Provider):
         if 'angle' in stack.coords:
             stack = stack.reset_coords('angle', drop=True)
 
-
+        
         return stack
 
 
@@ -274,7 +342,7 @@ class ERA5(provider_base.Provider):
 
         # Put time index to datetime.date() format to match S2
         cube["time"] = cube.time.to_index().date
-
+        
         return cube
 
 

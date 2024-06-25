@@ -11,5 +11,27 @@ dependencies:
   - wheel
   - conda-content-trust
   - conda-libmamba-solver
+  - numpy
+  - pandas
+  - xarray
+  - pyproj
+  - pathlib
+  - pystac-client
+  - rasterio
+  - stackstac
+  - planetary-computer
+  - s3fs
+  - boto3
+  - botocore
+  - zarr
+  - shapely
+  - requests
+  - sen2nbar
+  - segmentation-models-pytorch
+  - odc-stac
+  - odc-algo
 
 
+  - pip:
+      - pystac-client
+      - planetary-computer

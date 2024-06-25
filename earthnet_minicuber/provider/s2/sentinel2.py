@@ -65,7 +65,7 @@ class Sentinel2(provider_base.Provider):
             URL = 'https://planetarycomputer.microsoft.com/api/stac/v1'
 
         else:
-            URL = "https://earth-search.aws.element84.com/v0"
+            URL = "https://earth-search.aws.element84.com/v1"
             if 'AWS_S3_ENDPOINT' in os.environ:
                 del os.environ['AWS_S3_ENDPOINT']
         
